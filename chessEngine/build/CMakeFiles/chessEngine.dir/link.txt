@@ -1,0 +1,1 @@
+/usr/bin/c++ -g -fsanitize=address,undefined -Wl,--dependency-file=CMakeFiles/chessEngine.dir/link.d CMakeFiles/chessEngine.dir/src/bitboard/bitboard.cpp.o CMakeFiles/chessEngine.dir/src/main.cpp.o CMakeFiles/chessEngine.dir/src/movegen/movegen.cpp.o CMakeFiles/chessEngine.dir/src/position/position.cpp.o -o chessEngine
