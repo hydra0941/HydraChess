@@ -1,4 +1,5 @@
 #pragma once
+#include "bitboard/types.h"
 #include "position/position.h"
 
 struct MoveList {
@@ -13,3 +14,4 @@ struct MoveList {
 };
 
 void generate(const Position& pos, MoveList& list);
+void generate_legal(Position& pos, MoveList& list);

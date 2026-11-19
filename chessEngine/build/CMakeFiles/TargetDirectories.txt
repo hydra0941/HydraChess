@@ -1,3 +1,0 @@
-/home/meow/Programming/Dev-cpp/chessEngine/build/CMakeFiles/chessEngine.dir
-/home/meow/Programming/Dev-cpp/chessEngine/build/CMakeFiles/edit_cache.dir
-/home/meow/Programming/Dev-cpp/chessEngine/build/CMakeFiles/rebuild_cache.dir

@@ -1,6 +1,7 @@
 #pragma once
 #include <string>
 #include "bitboard/bitboard.h"
+#include "bitboard/types.h"
 
 struct StateInfo {
     Piece   captured;
@@ -24,8 +25,10 @@ class Position {
         int      castling_rights() const             { return castling; }
         Square   ep_square() const                   { return epSquare; }
         Bitboard attackers_to(Square s, Bitboard occ) const;
+        bool     in_check() const { return attackers_to(king_square(sideToMove), pieces()) & pieces(~sideToMove); }
         void do_move(Move m,StateInfo& st);
         void undo_move(Move m, const StateInfo& st);
+        bool is_legal(Move m);
         
     
     private:

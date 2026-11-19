@@ -1,4 +1,5 @@
 #include "position/position.h"
+#include "bitboard/types.h"
 #include <sstream>
 
 namespace {
@@ -116,82 +117,95 @@ Bitboard Position::attackers_to(Square s, Bitboard occ) const {
 void Position::do_move(Move m, StateInfo& st) {
     Square from = from_sq(m), to = to_sq(m);
     int fl = flags(m);
-    Color us = side_to_move, them = ~us;
+    Color us = sideToMove, them = ~us;
     Piece pc = board[from];
-    
+
     st.castling = castling;
     st.epSquare = epSquare;
     st.halfmove = halfmove;
     st.captured = NO_PIECE;
 
-    if(f1 == EP_CAPTURE) {
+    ++halfmove;
+    epSquare = NO_SQUARE;
+
+    if (fl == EP_CAPTURE) {
         Square capSq = Square(to + (us == WHITE ? -8 : 8));
         st.captured = board[capSq];
         remove_piece(capSq);
-        halfmove = 0;
     }
-    else if(f1 & CAPTURE) {
-        st.capture = board[to];
+    else if (fl & CAPTURE) {
+        st.captured = board[to];
         remove_piece(to);
-        halfmove = 0;
     }
+    if (st.captured != NO_PIECE) halfmove = 0;
 
     remove_piece(from);
-    if(f1 >= PROMO_N) {
-        put_piece(make_piece(us, PieceType(KNIGHT + (f1 & 3))), to);
-    }
+    if (fl >= PROMO_N)
+        put_piece(make_piece(us, PieceType(KNIGHT + (fl & 3))), to);
     else
         put_piece(pc, to);
 
-    if(f1 == DOUBLE_PUSH) {
-        epSquare = Square(from + (us == WHITE ? 8:-8));
-    }
+    if (fl == DOUBLE_PUSH)
+        epSquare = Square(from + (us == WHITE ? 8 : -8));
 
-    if(f1 == KING_CASTLE) {
-        Square rf = Square(to +1), rt = Square(to -1);
-        Piece rook  = board[rf];
+    if (fl == KING_CASTLE) {
+        Square rf = Square(to + 1), rt = Square(to - 1);
+        Piece rook = board[rf];
         remove_piece(rf); put_piece(rook, rt);
     }
-    else if(f1 == QUEEN_CASTLE) {
-        Square rf = Square(to -2), rt = Square(to +1)
-        Piece rook = board[rf]
-        remove_piece(rf); put_piece(rook, rt)
+    else if (fl == QUEEN_CASTLE) {
+        Square rf = Square(to - 2), rt = Square(to + 1);
+        Piece rook = board[rf];
+        remove_piece(rf); put_piece(rook, rt);
     }
-    if(type_of(pc) == PAWN) halfmove =0;
-        castling &= CastleMaskp[from] & CastleMask[to];
-    if(us == BLACK) ++fullmove {
-        side_to_move = them;
-    }
+
+    if (type_of(pc) == PAWN) halfmove = 0;
+    castling &= CastleMask[from] & CastleMask[to];
+    if (us == BLACK) ++fullmove;
+    sideToMove = them;
 }
 
-void Position::undo_move(Move m, const StateInfo st) {
-    side_to_move = ~sideToMove;
-    Color us = side_to_move;
+void Position::undo_move(Move m, const StateInfo& st) {
+    sideToMove = ~sideToMove;
+    Color us = sideToMove;
     Square from = from_sq(m), to = to_sq(m);
-    int f1 = flags(m);
+    int fl = flags(m);
 
-    if(us == BLACK) --fullmove;
+    if (us == BLACK) --fullmove;
     castling = st.castling;
     epSquare = st.epSquare;
     halfmove = st.halfmove;
 
-    if(f1 == KING_CASTLE) {
-        Square rf = Square(to +1), rt = Square(to -1);
+    if (fl == KING_CASTLE) {
+        Square rf = Square(to + 1), rt = Square(to - 1);
         Piece rook = board[rt];
         remove_piece(rt); put_piece(rook, rf);
     }
-    else if(f1 == QUEEN_CASTLE) {
-        Square rf = Square(to -2), rt = Square(to +1);
+    else if (fl == QUEEN_CASTLE) {
+        Square rf = Square(to - 2), rt = Square(to + 1);
         Piece rook = board[rt];
         remove_piece(rt); put_piece(rook, rf);
     }
 
     Piece moved = board[to];
     remove_piece(to);
-    put_piece(f1 >= PROMO_N ? make_piece(us, pawn) : moved, from);
+    put_piece(fl >= PROMO_N ? make_piece(us, PAWN) : moved, from);
 
-    if(st.captured != NO_PIECE){
-        Square capSq = (f1 == EP_CAPTURE) ? Square(to + (us == WHITE ? -8 : 8)) : to;
+    if (st.captured != NO_PIECE) {
+        Square capSq = (fl == EP_CAPTURE) ? Square(to + (us == WHITE ? -8 : 8)) : to;
         put_piece(st.captured, capSq);
     }
 }
+
+bool Position::is_legal(Move m) {
+    StateInfo st;
+    Color us = sideToMove;
+
+    do_move(m, st);
+
+    bool kingSafe = !(attackers_to(king_square(us), pieces()) & pieces(~us));
+    undo_move(m, st);
+
+    return kingSafe;
+}
+

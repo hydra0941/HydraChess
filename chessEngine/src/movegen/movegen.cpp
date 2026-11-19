@@ -1,4 +1,5 @@
 #include "movegen/movegen.h"
+#include "bitboard/types.h"
 
 namespace {
 
@@ -87,7 +88,6 @@ void generate_castling(const Position& pos, MoveList& list, Color us) {
     int rights = pos.castling_rights();
 
     Square e = make_square(4, r), f = make_square(5, r), g = make_square(6, r);
-        bool in_check() const {return attackers_to(king_square(side_to_move), pieces()) & pieces(~)}
     Square d = make_square(3, r), c = make_square(2, r), b = make_square(1, r);
 
     int kingSide  = (us == WHITE) ? WHITE_OO  : BLACK_OO;
@@ -115,4 +115,11 @@ void generate(const Position& pos, MoveList& list) {
     generate_pawns(pos, list, us);
     generate_pieces(pos, list, us);
     generate_castling(pos, list, us);
+}
+void generate_legal(Position &pos, MoveList &list) {
+    MoveList pseudo;
+    generate(pos, pseudo);
+    for(Move m : pseudo)
+        if(pos.is_legal(m))
+            list.add(m);
 }
