@@ -2,6 +2,7 @@
 #include <cstdint>
 
 using Bitboard = uint64_t;
+using Key      = uint64_t;
 enum Color : uint8_t {WHITE, BLACK, COLOR_NB = 2};
 enum PieceType : uint8_t {
     NO_PIECE_TYPE, PAWN, KNIGHT, BISHOP, ROOK, QUEEN, KING,

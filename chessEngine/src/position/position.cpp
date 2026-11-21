@@ -1,5 +1,7 @@
 #include "position/position.h"
 #include "bitboard/types.h"
+#include "position/zobrist.h"
+#include <cassert>
 #include <sstream>
 
 namespace {
@@ -27,12 +29,15 @@ void Position::clear() {
     epSquare = NO_SQUARE;
     halfmove = 0;
     fullmove = 1;
+    hashKey  = 0;
+    keyHistory.clear();
 }
 
 void Position::put_piece(Piece p, Square s) {
     board[s] = p;
     byType[type_of(p)]   |= square_bb(s);
     byColor[color_of(p)] |= square_bb(s);
+    hashKey ^= Zobrist::keys.psq[p][s];
 }
 
 void Position::remove_piece(Square s) {
@@ -40,6 +45,7 @@ void Position::remove_piece(Square s) {
     byType[type_of(p)]   &= ~square_bb(s);
     byColor[color_of(p)] &= ~square_bb(s);
     board[s] = NO_PIECE;
+    hashKey ^= Zobrist::keys.psq[p][s];
 }
 
 void Position::set(const std::string& fenStr) {
@@ -74,6 +80,36 @@ void Position::set(const std::string& fenStr) {
 
     if (ep != "-")
         epSquare = make_square(ep[0] - 'a', ep[1] - '1');
+
+    hashKey = compute_key();
+    keyHistory.reserve(1024);
+}
+
+bool Position::ep_capturable() const {
+    return epSquare != NO_SQUARE
+        && (PawnAttacks[~sideToMove][epSquare] & pieces(sideToMove, PAWN));
+}
+
+Key Position::compute_key() const {
+    Key k = 0;
+    for (int s = 0; s < SQUARE_NB; ++s)
+        if (board[s] != NO_PIECE)
+            k ^= Zobrist::keys.psq[board[s]][s];
+    if (sideToMove == BLACK)
+        k ^= Zobrist::keys.side;
+    k ^= Zobrist::keys.castling[castling];
+    if (ep_capturable())
+        k ^= Zobrist::keys.epFile[file_of(epSquare)];
+    return k;
+}
+
+bool Position::is_repetition() const {
+    int n     = int(keyHistory.size());
+    int limit = halfmove < n ? halfmove : n;
+    for (int i = 4; i <= limit; i += 2)
+        if (keyHistory[n - i] == hashKey)
+            return true;
+    return false;
 }
 
 std::string Position::fen() const {
@@ -124,6 +160,12 @@ void Position::do_move(Move m, StateInfo& st) {
     st.epSquare = epSquare;
     st.halfmove = halfmove;
     st.captured = NO_PIECE;
+    st.key      = hashKey;
+
+    keyHistory.push_back(hashKey);
+    if (ep_capturable())
+        hashKey ^= Zobrist::keys.epFile[file_of(epSquare)];
+    hashKey ^= Zobrist::keys.castling[castling];
 
     ++halfmove;
     epSquare = NO_SQUARE;
@@ -163,6 +205,13 @@ void Position::do_move(Move m, StateInfo& st) {
     castling &= CastleMask[from] & CastleMask[to];
     if (us == BLACK) ++fullmove;
     sideToMove = them;
+
+    hashKey ^= Zobrist::keys.side;
+    hashKey ^= Zobrist::keys.castling[castling];
+    if (ep_capturable())
+        hashKey ^= Zobrist::keys.epFile[file_of(epSquare)];
+
+    assert(hashKey == compute_key());
 }
 
 void Position::undo_move(Move m, const StateInfo& st) {
@@ -195,6 +244,10 @@ void Position::undo_move(Move m, const StateInfo& st) {
         Square capSq = (fl == EP_CAPTURE) ? Square(to + (us == WHITE ? -8 : 8)) : to;
         put_piece(st.captured, capSq);
     }
+
+    hashKey = st.key;
+    keyHistory.pop_back();
+    assert(hashKey == compute_key());
 }
 
 bool Position::is_legal(Move m) {

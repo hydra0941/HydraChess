@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 #include "bitboard/bitboard.h"
 #include "bitboard/types.h"
 
@@ -8,6 +9,7 @@ struct StateInfo {
     uint8_t castling;
     Square  epSquare;
     int     halfmove;
+    Key     key;
 };
 
 class Position {
@@ -24,6 +26,11 @@ class Position {
         Color    side_to_move() const                { return sideToMove; }
         int      castling_rights() const             { return castling; }
         Square   ep_square() const                   { return epSquare; }
+        int      halfmove_clock() const              { return halfmove; }
+        Key      key() const                         { return hashKey; }
+        Key      compute_key() const;
+        bool     is_repetition() const;
+        bool     is_draw() const                     { return halfmove >= 100 || is_repetition(); }
         Bitboard attackers_to(Square s, Bitboard occ) const;
         bool     in_check() const { return attackers_to(king_square(sideToMove), pieces()) & pieces(~sideToMove); }
         void do_move(Move m,StateInfo& st);
@@ -35,6 +42,7 @@ class Position {
         void put_piece(Piece p, Square s);
         void remove_piece(Square s);
         void clear();
+        bool ep_capturable() const;
 
         Piece       board[SQUARE_NB];
         Bitboard    byType[PIECE_TYPE_NB];
@@ -44,4 +52,6 @@ class Position {
         Square      epSquare    =NO_SQUARE;
         int         halfmove    =0;
         int         fullmove    =1;
+        Key         hashKey     = 0;
+        std::vector<Key> keyHistory;
 };

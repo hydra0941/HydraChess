@@ -13,6 +13,9 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS src/*.cpp)
 add_executable(${PROJECT_NAME} ${SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE src)
 
+find_package(Threads REQUIRED)
+target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
+
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Wall -Wextra
     $<$<CONFIG:Debug>:-g -fsanitize=address,undefined>
