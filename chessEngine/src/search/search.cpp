@@ -136,7 +136,7 @@ int Worker::quiescence(int alpha, int beta, int ply) {
     return alpha;
 }
 
-int Worker::alpha_beta(int depth, int alpha, int beta, int ply) {
+int Worker::alpha_beta(int depth, int alpha, int beta, int ply, bool nullAllowed) {
     pvLength[ply] = ply;
 
     if (ply > 0 && pos.is_draw())
@@ -153,12 +153,15 @@ int Worker::alpha_beta(int depth, int alpha, int beta, int ply) {
     if (ply >= MAX_PLY - 1)
         return evaluate(pos);
 
+    bool pvNode  = beta - alpha > 1;
+    bool inCheck = pos.in_check();
+
     Key     key    = pos.key();
     Move    ttMove = 0;
     TTEntry entry;
     if (tt.probe(key, entry)) {
         ttMove = entry.move;
-        if (ply > 0 && entry.depth >= depth) {
+        if (!pvNode && entry.depth >= depth) {
             int ttScore = score_from_tt(entry.score, ply);
             if (entry.bound == BOUND_EXACT)
                 return ttScore;
@@ -169,21 +172,45 @@ int Worker::alpha_beta(int depth, int alpha, int beta, int ply) {
         }
     }
 
+    if (!pvNode && nullAllowed && !inCheck && ply > 0 && depth >= 3
+        && pos.non_pawn_count(pos.side_to_move()) >= 2 && evaluate(pos) >= beta) {
+        int nullDepth = std::max(0, depth - 1 - (3 + depth / 3));
+
+        StateInfo st;
+        pos.do_null_move(st);
+        int score = -alpha_beta(nullDepth, -beta, -beta + 1, ply + 1, false);
+        pos.undo_null_move(st);
+
+        if (stopped)
+            return 0;
+        if (score >= beta)
+            return beta;
+    }
+
     MoveList list;
     generate_legal(pos, list);
 
     if (list.count == 0)
-        return pos.in_check() ? -MATE + ply : 0;
+        return inCheck ? -MATE + ply : 0;
 
     order_moves(list, ply, ttMove);
 
     int  alphaOrig = alpha;
     Move bestMove  = 0;
 
-    for (Move m : list) {
+    for (int n = 0; n < list.count; ++n) {
+        Move m = list.moves[n];
+
         StateInfo st;
         pos.do_move(m, st);
-        int score = -alpha_beta(depth - 1, -beta, -alpha, ply + 1);
+        int score;
+        if (n == 0) {
+            score = -alpha_beta(depth - 1, -beta, -alpha, ply + 1);
+        } else {
+            score = -alpha_beta(depth - 1, -alpha - 1, -alpha, ply + 1);
+            if (score > alpha && score < beta)
+                score = -alpha_beta(depth - 1, -beta, -alpha, ply + 1);
+        }
         pos.undo_move(m, st);
 
         if (stopped)

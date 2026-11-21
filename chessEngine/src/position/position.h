@@ -35,6 +35,9 @@ class Position {
         bool     in_check() const { return attackers_to(king_square(sideToMove), pieces()) & pieces(~sideToMove); }
         void do_move(Move m,StateInfo& st);
         void undo_move(Move m, const StateInfo& st);
+        void do_null_move(StateInfo& st);
+        void undo_null_move(const StateInfo& st);
+        int  non_pawn_count(Color c) const { return popcount(pieces(c) & ~(pieces(PAWN) | pieces(KING))); }
         bool is_legal(Move m);
         
     

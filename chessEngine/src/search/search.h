@@ -48,7 +48,7 @@ class Worker {
         void    order_captures(MoveList& list) const;
         void    update_quiet(Move m, int depth, int ply);
         int     quiescence(int alpha, int beta, int ply);
-        int     alpha_beta(int depth, int alpha, int beta, int ply);
+        int     alpha_beta(int depth, int alpha, int beta, int ply, bool nullAllowed = true);
 
         std::atomic<bool>& stopSignal;
         TranspositionTable& tt;

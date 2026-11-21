@@ -250,6 +250,34 @@ void Position::undo_move(Move m, const StateInfo& st) {
     assert(hashKey == compute_key());
 }
 
+void Position::do_null_move(StateInfo& st) {
+    st.castling = castling;
+    st.epSquare = epSquare;
+    st.halfmove = halfmove;
+    st.captured = NO_PIECE;
+    st.key      = hashKey;
+
+    keyHistory.push_back(hashKey);
+    if (ep_capturable())
+        hashKey ^= Zobrist::keys.epFile[file_of(epSquare)];
+    epSquare = NO_SQUARE;
+    halfmove = 0;
+
+    sideToMove = ~sideToMove;
+    hashKey ^= Zobrist::keys.side;
+
+    assert(hashKey == compute_key());
+}
+
+void Position::undo_null_move(const StateInfo& st) {
+    sideToMove = ~sideToMove;
+    castling   = st.castling;
+    epSquare   = st.epSquare;
+    halfmove   = st.halfmove;
+    hashKey    = st.key;
+    keyHistory.pop_back();
+}
+
 bool Position::is_legal(Move m) {
     StateInfo st;
     Color us = sideToMove;
