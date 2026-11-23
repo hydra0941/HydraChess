@@ -142,6 +142,10 @@ int Worker::alpha_beta(int depth, int alpha, int beta, int ply, bool nullAllowed
     if (ply > 0 && pos.is_draw())
         return 0;
 
+    bool inCheck = pos.in_check();
+    if (inCheck && ply < MAX_PLY - 1)
+        ++depth;
+
     if (depth == 0)
         return quiescence(alpha, beta, ply);
 
@@ -153,8 +157,7 @@ int Worker::alpha_beta(int depth, int alpha, int beta, int ply, bool nullAllowed
     if (ply >= MAX_PLY - 1)
         return evaluate(pos);
 
-    bool pvNode  = beta - alpha > 1;
-    bool inCheck = pos.in_check();
+    bool pvNode = beta - alpha > 1;
 
     Key     key    = pos.key();
     Move    ttMove = 0;
