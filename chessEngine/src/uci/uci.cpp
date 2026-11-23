@@ -128,7 +128,7 @@ void uci_loop() {
 
     std::atomic<bool> stop{false};
     TranspositionTable tt(16);
-    Worker worker(stop, tt);
+    ThreadPool pool(stop, tt);
     std::thread searchThread;
 
     auto stop_search = [&] {
@@ -147,6 +147,7 @@ void uci_loop() {
             send("id name HydraChess");
             send("id author hydra0941");
             send("option name Hash type spin default 16 min 1 max 1024");
+            send("option name Threads type spin default 1 min 1 max 256");
             send("uciok");
         } else if (cmd == "isready") {
             send("readyok");
@@ -161,6 +162,8 @@ void uci_loop() {
             is >> token >> name >> token >> value;
             if (name == "Hash" && value > 0)
                 tt.resize(size_t(std::min<int64_t>(value, 1024)));
+            else if (name == "Threads" && value > 0)
+                pool.set_threads(int(std::min<int64_t>(value, 256)));
         } else if (cmd == "position") {
             stop_search();
             set_position(pos, is);
@@ -168,8 +171,8 @@ void uci_loop() {
             stop_search();
             SearchLimits limits = parse_go(pos, is);
             stop = false;
-            searchThread = std::thread([&worker, root = pos, limits] {
-                SearchResult r = worker.search(root, limits, print_info);
+            searchThread = std::thread([&pool, root = pos, limits] {
+                SearchResult r = pool.search(root, limits, print_info);
                 send("bestmove " + move_to_uci(r.bestMove));
             });
         } else if (cmd == "stop") {

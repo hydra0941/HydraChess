@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include "bitboard/types.h"
@@ -34,7 +35,10 @@ using IterationCallback = std::function<void(const SearchResult&)>;
 
 class Worker {
     public:
-        Worker(std::atomic<bool>& stopSignal, TranspositionTable& tt) : stopSignal(stopSignal), tt(tt) {}
+
+        Worker(int id, std::atomic<bool>& stopSignal, std::atomic<uint64_t>& totalNodes,
+               TranspositionTable& tt)
+            : id(id), stopSignal(stopSignal), totalNodes(totalNodes), tt(tt) {}
 
         SearchResult search(const Position& root, const SearchLimits& limits,
                             const IterationCallback& onIteration = {});
@@ -42,7 +46,9 @@ class Worker {
     private:
         using Clock = std::chrono::steady_clock;
 
-        int64_t elapsed_ms() const;
+        int64_t  elapsed_ms() const;
+        void     flush_nodes();
+        uint64_t total_nodes() const;
         void    check_stop();
         void    order_moves(MoveList& list, int ply, Move ttMove) const;
         void    order_captures(MoveList& list) const;
@@ -50,12 +56,15 @@ class Worker {
         int     quiescence(int alpha, int beta, int ply);
         int     alpha_beta(int depth, int alpha, int beta, int ply, bool nullAllowed = true);
 
-        std::atomic<bool>& stopSignal;
-        TranspositionTable& tt;
+        int                    id;
+        std::atomic<bool>&     stopSignal;
+        std::atomic<uint64_t>& totalNodes;
+        TranspositionTable&    tt;
         Position           pos;
         SearchLimits       limits;
         Clock::time_point  startTime;
         uint64_t           nodes   = 0;
+        uint64_t           flushed = 0;   
         bool               stopped = false;
         bool               canStop = false;
 
@@ -63,6 +72,25 @@ class Worker {
         int  history[COLOR_NB][SQUARE_NB][SQUARE_NB] = {};
         Move pvTable[MAX_PLY][MAX_PLY]               = {};
         int  pvLength[MAX_PLY]                       = {};
+};
+
+
+class ThreadPool {
+    public:
+        ThreadPool(std::atomic<bool>& stopSignal, TranspositionTable& tt);
+        ~ThreadPool();
+
+        void set_threads(int n);
+        int  size() const { return int(workers.size()); }
+
+        SearchResult search(const Position& root, const SearchLimits& limits,
+                            const IterationCallback& onIteration = {});
+
+    private:
+        std::atomic<bool>&                   stopSignal;
+        TranspositionTable&                  tt;
+        std::atomic<uint64_t>                totalNodes{0};
+        std::vector<std::unique_ptr<Worker>> workers;
 };
 
 std::string move_to_uci(Move m);

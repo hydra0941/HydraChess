@@ -1,7 +1,8 @@
 #pragma once
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <vector>
+#include <memory>
 #include "bitboard/types.h"
 
 enum Bound : uint8_t { BOUND_NONE, BOUND_UPPER, BOUND_LOWER, BOUND_EXACT };
@@ -24,6 +25,11 @@ class TranspositionTable {
         void store(Key key, Move move, int score, int depth, Bound bound);
 
     private:
-        std::vector<TTEntry> table;
-        size_t               mask = 0;
+        struct Slot {
+            std::atomic<uint64_t> check{0};
+            std::atomic<uint64_t> data{0};
+        };
+
+        std::unique_ptr<Slot[]> table;
+        size_t                  mask = 0;
 };

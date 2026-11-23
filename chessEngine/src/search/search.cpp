@@ -1,6 +1,7 @@
 #include "search/search.h"
 #include <algorithm>
 #include <cstring>
+#include <thread>
 #include "eval/eval.h"
 
 namespace {
@@ -52,9 +53,19 @@ int64_t Worker::elapsed_ms() const {
     return std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - startTime).count();
 }
 
+void Worker::flush_nodes() {
+    totalNodes.fetch_add(nodes - flushed, std::memory_order_relaxed);
+    flushed = nodes;
+}
+
+uint64_t Worker::total_nodes() const {
+    return totalNodes.load(std::memory_order_relaxed) + (nodes - flushed);
+}
+
 void Worker::check_stop() {
     if ((nodes & 2047) != 0)
         return;
+    flush_nodes();
     if (stopSignal.load(std::memory_order_relaxed)
         || (canStop && limits.hardMs > 0 && elapsed_ms() >= limits.hardMs))
         stopped = true;
@@ -249,6 +260,7 @@ SearchResult Worker::search(const Position& root, const SearchLimits& searchLimi
     limits    = searchLimits;
     startTime = Clock::now();
     nodes     = 0;
+    flushed   = 0;
     stopped   = false;
     canStop   = false;
 
@@ -257,19 +269,21 @@ SearchResult Worker::search(const Position& root, const SearchLimits& searchLimi
 
     int maxDepth = std::clamp(limits.depth, 1, MAX_PLY - 1);
 
-    for (int depth = 1; depth <= maxDepth; ++depth) {
+    int startDepth = (id > 0 && id % 2 == 1) ? std::min(2, maxDepth) : 1;
+
+    for (int depth = startDepth; depth <= maxDepth; ++depth) {
         int score = alpha_beta(depth, -INF, INF, 0);
         if (stopped)
             break;
 
         result.depth    = depth;
         result.score    = score;
-        result.nodes    = nodes;
+        result.nodes    = total_nodes();
         result.timeMs   = elapsed_ms();
         result.pv.assign(pvTable[0], pvTable[0] + pvLength[0]);
         result.bestMove = result.pv.empty() ? 0 : result.pv[0];
 
-        if (onIteration)
+        if (id == 0 && onIteration)
             onIteration(result);
 
         if (result.pv.empty())
@@ -287,8 +301,48 @@ SearchResult Worker::search(const Position& root, const SearchLimits& searchLimi
             result.bestMove = list.moves[0];
     }
 
+    flush_nodes();
     result.nodes  = nodes;
     result.timeMs = elapsed_ms();
+    return result;
+}
+
+ThreadPool::ThreadPool(std::atomic<bool>& stopSignal, TranspositionTable& tt)
+    : stopSignal(stopSignal), tt(tt) {
+    set_threads(1);
+}
+
+ThreadPool::~ThreadPool() = default;
+
+void ThreadPool::set_threads(int n) {
+    n = std::max(1, n);
+    workers.clear();
+    for (int i = 0; i < n; ++i)
+        workers.push_back(std::make_unique<Worker>(i, stopSignal, totalNodes, tt));
+}
+
+SearchResult ThreadPool::search(const Position& root, const SearchLimits& limits,
+                                const IterationCallback& onIteration) {
+    totalNodes.store(0, std::memory_order_relaxed);
+
+    SearchLimits helperLimits = limits;
+    helperLimits.softMs = 0;
+    helperLimits.hardMs = 0;
+
+    std::vector<std::thread> helpers;
+    helpers.reserve(workers.size() - 1);
+    for (size_t i = 1; i < workers.size(); ++i)
+        helpers.emplace_back([this, i, &root, helperLimits] {
+            workers[i]->search(root, helperLimits);
+        });
+
+    SearchResult result = workers[0]->search(root, limits, onIteration);
+
+    stopSignal.store(true, std::memory_order_relaxed);
+    for (std::thread& t : helpers)
+        t.join();
+
+    result.nodes = totalNodes.load(std::memory_order_relaxed);
     return result;
 }
 
