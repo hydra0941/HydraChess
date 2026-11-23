@@ -276,7 +276,7 @@ SearchResult Worker::search(const Position& root, const SearchLimits& searchLimi
             break;
 
         canStop = true;
-        if (limits.softMs > 0 && elapsed_ms() >= limits.softMs)
+        if (limits.softMs > 0 && elapsed_ms() * 2 >= limits.softMs)
             break;
     }
 

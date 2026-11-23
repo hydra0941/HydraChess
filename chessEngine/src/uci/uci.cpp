@@ -102,7 +102,7 @@ SearchLimits parse_go(const Position& pos, std::istringstream& is) {
 
     if (movetime > 0) {
         limits.hardMs = std::max<int64_t>(1, movetime - MOVE_OVERHEAD_MS);
-        limits.softMs = std::max<int64_t>(1, limits.hardMs / 2);
+        limits.softMs = limits.hardMs;
         return limits;
     }
 
@@ -113,8 +113,8 @@ SearchLimits parse_go(const Position& pos, std::istringstream& is) {
         return limits;
 
     int64_t available = std::max<int64_t>(1, time - MOVE_OVERHEAD_MS);
-    int64_t soft      = available / (movestogo > 0 ? movestogo : 30) + inc / 2;
-    int64_t hard      = std::min(soft * 3, available / 2);
+    int64_t soft      = available / (movestogo > 0 ? movestogo : 40) + inc * 3 / 4;
+    int64_t hard      = std::min(soft * 2, available / 4);
     limits.hardMs     = std::max<int64_t>(1, hard);
     limits.softMs     = std::max<int64_t>(1, std::min(soft, hard));
     return limits;
